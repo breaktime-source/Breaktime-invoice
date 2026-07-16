@@ -76,6 +76,8 @@
   .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .print-btn { padding: 10px 24px; background: #C0392B; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; }
   .clear-btn { padding: 10px 24px; background: #fff; color: #C0392B; border: 2px solid #C0392B; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; }
+  .margin-select-wrap { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
+  .margin-select { padding: 8px 10px; border: 1.5px solid #ccc; border-radius: 8px; font-size: 13px; color: #333; background: #fff; }
 
   .signature-section { display: flex; justify-content: flex-start; padding: 18px 24px 10px; }
   .signature-box { text-align: center; }
@@ -110,12 +112,13 @@
 
     .actions { flex-direction: column; }
     .actions button { width: 100%; }
+    .margin-select-wrap { width: 100%; justify-content: space-between; }
+    .margin-select { flex: 1; max-width: 160px; }
 
     .signature-section { justify-content: center; }
   }
 
   @media print {
-    @page { margin: 10mm; }
     html, body { height: 100%; }
     body { background: #fff; padding: 0; }
     .actions, .tabs, .add-btn, .del-btn, .toggle-cb { display: none !important; }
@@ -143,6 +146,7 @@
     .inv-footer-wrap { position: static; margin-top: auto; }
   }
 </style>
+<style id="page-margin-style">@page { margin: 10mm; }</style>
 </head>
 <body>
 <div class="app">
@@ -263,6 +267,15 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
   <div class="actions">
     <button class="print-btn" onclick="window.print()">&#128438; Print / Save PDF</button>
     <button class="clear-btn" onclick="clearForm()">&#8635; Clear</button>
+    <div class="margin-select-wrap">
+      <label for="margin-select">Margins</label>
+      <select class="margin-select" id="margin-select" onchange="setPageMargin(this.value)">
+        <option value="0">None</option>
+        <option value="5">Narrow (5mm)</option>
+        <option value="10" selected>Normal (10mm)</option>
+        <option value="15">Wide (15mm)</option>
+      </select>
+    </div>
   </div>
 </div>
 
@@ -286,6 +299,11 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
   window.addEventListener('beforeprint', fitNameField);
   window.addEventListener('load', fitNameField);
   window.addEventListener('resize', fitNameField);
+
+  function setPageMargin(mm) {
+    var styleTag = document.getElementById('page-margin-style');
+    if (styleTag) styleTag.textContent = '@page { margin: ' + mm + 'mm; }';
+  }
 
   function switchDoc(type, btn) {
     document.getElementById('doc-type-label').textContent = type;
