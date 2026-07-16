@@ -141,12 +141,14 @@
     .inv-type { color: #111 !important; }
     table.items th { color: #111 !important; }
     table.items td { border-bottom: none !important; }
-    table.items tr:last-child td { border-bottom: 1px solid #bbb !important; }
+    table.items tr:last-child td { border-bottom-width: 1.5px !important; border-bottom-style: solid !important; border-bottom-color: #bbb !important; }
     table.items tr:nth-child(even) td { background: transparent !important; }
+    table.totals .trow td { border-top-width: 1.5px !important; }
+    .signature-line { border-top-width: 1.5px !important; }
     .inv-footer-wrap { position: static; margin-top: auto; }
   }
 </style>
-<style id="page-margin-style">@page { margin: 10mm; }</style>
+<style id="page-margin-style">@page { margin: 0mm; }</style>
 </head>
 <body>
 <div class="app">
@@ -270,9 +272,9 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
     <div class="margin-select-wrap">
       <label for="margin-select">Margins</label>
       <select class="margin-select" id="margin-select" onchange="setPageMargin(this.value)">
-        <option value="0">None</option>
+        <option value="0" selected>None</option>
         <option value="5">Narrow (5mm)</option>
-        <option value="10" selected>Normal (10mm)</option>
+        <option value="10">Normal (10mm)</option>
         <option value="15">Wide (15mm)</option>
       </select>
     </div>
