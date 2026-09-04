@@ -1,7 +1,8 @@
-const CACHE_NAME = 'breaktime-invoice-v1';
+const CACHE_NAME = 'breaktime-invoice-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
+  './firebase-config.js',
   './icon-192.png',
   './icon-512.png'
 ];
