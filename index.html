@@ -45,6 +45,15 @@
   .field-group label { font-size: 10px; font-weight: 700; color: #888; }
   .field-group input { border: none; border-bottom: 1px solid #ddd; font-size: 13px; padding: 4px 0; outline: none; color: #111; background: transparent; }
   .field-group input:focus { border-bottom-color: #C0392B; }
+  /* Customer name: sits on one line and widens with the text, then wraps to
+     further lines once it reaches the No/Date box. Nothing is ever hidden. */
+  .bill-meta-row > div:first-child { flex: 1 1 auto; min-width: 0; }
+  #bill-name { display: inline-block; max-width: 100%; min-width: 160px;
+    border: none; border-bottom: 1px solid #ddd; font-size: 13px; padding: 4px 0;
+    outline: none; color: #111; background: transparent;
+    white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+  #bill-name:focus { border-bottom-color: #C0392B; }
+  #bill-name:empty::before { content: attr(data-ph); color: #ccc; }
   table.items { width: 100%; border-collapse: collapse; }
   table.items th { background: #C0392B; color: #fff; font-size: 11px; padding: 8px 8px; font-weight: 700; }
   table.items th:nth-child(n+2) { text-align: right; }
@@ -152,8 +161,143 @@
   }
 </style>
 <style id="page-margin-style">@page { margin: 0mm; }</style>
+<style id="bt-firebase-chrome">
+  /* ------------------------------------------------------------
+     Firebase layer: login, top bar, history, settings, stamp.
+     The invoice design above is untouched.
+     ------------------------------------------------------------ */
+  #loginView { min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-card { width: 100%; max-width: 330px; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.10); padding: 26px 24px 22px; }
+  .login-card h1 { font-size: 20px; color: #C0392B; margin-bottom: 2px; }
+  .login-card .sub { font-size: 13px; color: #888; margin-bottom: 20px; }
+  .login-card .row { margin-bottom: 14px; }
+  .login-card label { display: block; font-size: 10px; font-weight: 700; color: #888; margin-bottom: 3px; }
+  .login-card input { width: 100%; border: none; border-bottom: 1px solid #ddd; font-size: 14px; padding: 6px 0; outline: none; background: transparent; }
+  .login-card input:focus { border-bottom-color: #C0392B; }
+  #pinInput { letter-spacing: .3em; font-size: 18px; }
+  #loginMsg { min-height: 18px; font-size: 12px; color: #C0392B; margin-top: 10px; }
+
+  #appView { display: none; }
+  .bt-topbar { max-width: 750px; margin: 0 auto 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bt-nav { display: flex; gap: 6px; }
+  .bt-nav button { padding: 7px 14px; border: 1.5px solid #C0392B; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700; background: #fff; color: #C0392B; }
+  .bt-nav button[aria-pressed="true"] { background: #C0392B; color: #fff; }
+  .bt-who { margin-left: auto; font-size: 12px; color: #777; white-space: nowrap; }
+  .bt-out { padding: 6px 12px; border: 1.5px solid #ccc; border-radius: 8px; background: #fff; color: #666; cursor: pointer; font-size: 12px; font-weight: 700; }
+  .bt-dirty { font-size: 12px; color: #b7791f; align-self: center; }
+
+  .save-btn { padding: 10px 24px; background: #C0392B; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; }
+  .alt-btn { padding: 10px 20px; background: #fff; color: #555; border: 2px solid #ccc; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; }
+  .alt-btn.danger { color: #C0392B; border-color: #e8b4ae; }
+  .save-btn[disabled], .alt-btn[disabled] { opacity: .4; cursor: not-allowed; }
+
+  .bt-panel { max-width: 750px; margin: 0 auto 14px; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.10); padding: 18px 20px; }
+  .bt-panel h3 { font-size: 15px; color: #C0392B; margin-bottom: 14px; }
+  .bt-panel .hint { font-size: 12px; color: #888; margin: -8px 0 14px; }
+  .bt-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+  .bt-grid > div { flex: 1; min-width: 120px; }
+  .bt-field { width: 100%; border: 1.5px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; background: #fff; }
+  .bt-field:focus { border-color: #C0392B; }
+  .bt-lbl { display: block; font-size: 10px; font-weight: 700; color: #888; margin-bottom: 3px; }
+  .bt-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bt-filters .bt-field { width: auto; flex: 1; min-width: 120px; }
+
+  table.bt-list { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.bt-list th { text-align: left; padding: 7px 6px; border-bottom: 1.5px solid #ddd; font-size: 10px; font-weight: 700; color: #888; }
+  table.bt-list td { padding: 9px 6px; border-bottom: 1px solid #f0f0f0; }
+  table.bt-list td.bt-num { text-align: right; }
+  table.bt-list td.bt-act { text-align: right; }
+  .bt-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; border: 1px solid #ddd; color: #777; }
+  .bt-chip.paid { border-color: #a8d5b8; color: #1d6b3f; background: #f2f9f5; }
+  .bt-chip.inv { border-color: #e8b4ae; color: #C0392B; background: #fdf3f2; }
+  .bt-chip.quo { border-color: #d8c496; color: #8a6100; background: #fbf7ee; }
+  .bt-empty { padding: 22px 6px; text-align: center; color: #999; font-size: 13px; }
+  .bt-open { padding: 5px 12px; border: 1.5px solid #C0392B; border-radius: 6px; background: #fff; color: #C0392B; cursor: pointer; font-size: 12px; font-weight: 700; }
+
+  .bt-modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 200; }
+  .bt-modal.on { display: flex; }
+  .bt-modal .box { background: #fff; border-radius: 10px; padding: 20px; width: 100%; max-width: 400px; max-height: 88vh; overflow: auto; }
+  .bt-modal h3 { font-size: 16px; color: #C0392B; margin-bottom: 14px; }
+  .bt-modal .row { margin-bottom: 12px; }
+  .bt-modal .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+
+  #btToast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 300; display: none; max-width: 88vw; }
+  #btToast.on { display: block; }
+
+  /* paid stamp — plain version, pending your reference image */
+  .invoice { position: relative; }
+  #paidStamp { position: absolute; right: 40px; bottom: 150px; transform: rotate(-14deg); border: 3px solid #1d6b3f; color: #1d6b3f; border-radius: 6px; padding: 6px 16px 7px; text-align: center; opacity: .85; pointer-events: none; display: none; z-index: 5; }
+  #paidStamp.on { display: block; }
+  #paidStamp .w { font-size: 26px; font-weight: 800; letter-spacing: .08em; line-height: 1; }
+  #paidStamp .d { font-size: 10px; margin-top: 3px; }
+
+  @media screen and (max-width: 640px) {
+    .bt-topbar { gap: 6px; }
+    .bt-nav { flex: 1; }
+    .bt-nav button { flex: 1; padding: 8px 6px; font-size: 12px; }
+    .bt-out { padding: 8px 10px; }
+    .bt-who { width: 100%; margin-left: 0; text-align: center; order: 9; }
+    .bt-dirty { order: 8; }
+    .bt-panel { padding: 14px; }
+
+    /* Six stacked full-width buttons is a lot of scrolling, so they pair up.
+       This overrides the form's own .actions column rule. */
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .actions button { width: 100% !important; margin: 0; }
+    .margin-select-wrap { grid-column: 1 / -1; }
+    .margin-select { max-width: none; }
+
+    /* A six-column table does not fit a phone, so each row becomes a card. */
+    table.bt-list thead { display: none; }
+    table.bt-list, table.bt-list tbody, table.bt-list tr, table.bt-list td { display: block; width: auto; }
+    table.bt-list tr { border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+    table.bt-list td { border: none; padding: 3px 0; font-size: 13px; }
+    table.bt-list td::before { content: attr(data-l); display: inline-block; min-width: 74px;
+      font-size: 10px; font-weight: 700; color: #aaa; }
+    table.bt-list td.bt-num, table.bt-list td.bt-act { text-align: left; }
+    table.bt-list td.bt-act { margin-top: 8px; }
+    table.bt-list td.bt-act::before { content: none; }
+    .bt-open { width: 100%; padding: 8px; }
+
+    #paidStamp { right: 14px; bottom: 118px; transform: rotate(-12deg) scale(.8); }
+  }
+
+  @media print {
+    .bt-topbar, #historyView, #settingsView, .bt-modal, #btToast, .save-btn, .alt-btn { display: none !important; }
+    #paidStamp { opacity: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+
 </head>
 <body>
+<div id="loginView">
+  <div class="login-card">
+    <h1>Break Time</h1>
+    <div class="sub">Invoices &amp; quotations</div>
+    <div class="row">
+      <label for="userInput">Username</label>
+      <input id="userInput" autocomplete="username" autocapitalize="none" spellcheck="false">
+    </div>
+    <div class="row">
+      <label for="pinInput">PIN</label>
+      <input id="pinInput" type="password" inputmode="numeric" autocomplete="current-password">
+    </div>
+    <button id="loginBtn" class="save-btn" style="width:100%">Sign in</button>
+    <div id="loginMsg" role="status" aria-live="polite"></div>
+  </div>
+</div>
+<div id="appView">
+<div class="bt-topbar">
+  <div class="bt-nav">
+    <button id="navDoc" aria-pressed="true">Document</button>
+    <button id="navHist" aria-pressed="false">History</button>
+    <button id="navSet" aria-pressed="false">Settings</button>
+  </div>
+  <span class="bt-dirty" id="dirtyFlag"></span>
+  <span class="bt-who" id="whoLabel"></span>
+  <button class="bt-out" id="logoutBtn">Sign out</button>
+</div>
+
 <div class="app">
   <div class="tabs">
     <button class="tab active" onclick="switchDoc('TAX INVOICE', this)">Invoice</button>
@@ -161,6 +305,7 @@
   </div>
 
   <div class="invoice">
+    <div id="paidStamp"><div class="w">PAID</div><div class="d" id="stampDetail"></div></div>
     <div class="inv-header">
       <div class="inv-logo">
         <img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gIoSUNDX1BST0ZJTEUAAQEAAAIYAAAAAAIQAABtbnRyUkdCIFhZWiAAAAAAAAAAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAAHRyWFlaAAABZAAAABRnWFlaAAABeAAAABRiWFlaAAABjAAAABRyVFJDAAABoAAAAChnVFJDAAABoAAAAChiVFJDAAABoAAAACh3dHB0AAAByAAAABRjcHJ0AAAB3AAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAFgAAAAcAHMAUgBHAEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFhZWiAAAAAAAABvogAAOPUAAAOQWFlaIAAAAAAAAGKZAAC3hQAAGNpYWVogAAAAAAAAJKAAAA+EAAC2z3BhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABYWVogAAAAAAAA9tYAAQAAAADTLW1sdWMAAAAAAAAAAQAAAAxlblVTAAAAIAAAABwARwBvAG8AZwBsAGUAIABJAG4AYwAuACAAMgAwADEANv/bAEMABQMEBAQDBQQEBAUFBQYHDAgHBwcHDwsLCQwRDxISEQ8RERMWHBcTFBoVEREYIRgaHR0fHx8TFyIkIh4kHB4fHv/bAEMBBQUFBwYHDggIDh4UERQeHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHv/AABEIAhcGQAMBIgACEQEDEQH/xAAdAAEAAwADAQEBAAAAAAAAAAAAAQcIAgUGBAMJ/8QAWBAAAQMDAQMHBwQNCwMDAwQDAAECAwQFEQYHEiEIFzFBUWGRExQiVXGBsRWSk6EjMjQ2QlJUcnN0dbLBFhgzNzhTVmKC0eEkQ5Q1g4QlRLMmJyhFY6LC/8QAHAEBAAEFAQEAAAAAAAAAAAAAAAUBAwQGBwII/8QAPxEAAgIBAgMEBggFBAIDAQEAAAECAwQFEQYSMRQhQVETFlJTcZEiMkJhgaGxwRUzNZLRI3Lh8ENUNGKC8bL/2gAMAwEAAhEDEQA/APCAA1I+jgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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
@@ -193,7 +338,8 @@ QW3iqt9FFRaipXVaMRGpOxfSVO8kMS+Cg659GafxJpGXZlV52It5R8PgV3b9Ha6t14hfR2S4Q1cMiKx7
           <div class="bill-fields">
         <div class="field-group">
           <label>Name</label>
-          <input type="text" id="bill-name" placeholder="Customer name">
+          <div id="bill-name" contenteditable="true" role="textbox"
+               aria-label="Customer name" data-ph="Customer name"></div>
         </div>
       </div>
         </div>
@@ -270,6 +416,10 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
   </div>
 
   <div class="actions">
+    <button class="save-btn" id="btSave">Save</button>
+    <button class="alt-btn" id="btConv">Convert to invoice</button>
+    <button class="alt-btn" id="btPaid">Mark paid</button>
+    <button class="alt-btn danger" id="btDel">Delete</button>
     <button class="print-btn" onclick="window.print()">&#128438; Print / Save PDF</button>
     <button class="clear-btn" onclick="clearForm()">&#8635; Clear</button>
     <div class="margin-select-wrap">
@@ -284,26 +434,121 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
   </div>
 </div>
 
+<div id="historyView" style="display:none">
+  <div class="bt-panel">
+    <h3>History</h3>
+    <div class="bt-filters">
+      <select id="fType" class="bt-field">
+        <option value="">All types</option>
+        <option value="invoice">Invoices</option>
+        <option value="quote">Quotations</option>
+      </select>
+      <select id="fPaid" class="bt-field">
+        <option value="">Any status</option>
+        <option value="paid">Paid</option>
+        <option value="unpaid">Unpaid</option>
+      </select>
+      <input id="fFrom" type="date" class="bt-field" aria-label="From date">
+      <input id="fTo" type="date" class="bt-field" aria-label="To date">
+      <input id="fText" class="bt-field" placeholder="Customer or number">
+    </div>
+    <div id="histWrap"></div>
+  </div>
+</div>
+
+<div id="settingsView" style="display:none">
+  <div class="bt-panel">
+    <h3>Numbering</h3>
+    <p class="hint">Numbers are assigned when a document is saved, not while you type.</p>
+    <div class="bt-grid">
+      <div><label class="bt-lbl" for="sInvPrefix">Invoice prefix</label><input id="sInvPrefix" class="bt-field"></div>
+      <div><label class="bt-lbl" for="sInvNext">Next invoice no.</label><input id="sInvNext" type="number" min="1" class="bt-field"></div>
+      <div><label class="bt-lbl" for="sQuoPrefix">Quote prefix</label><input id="sQuoPrefix" class="bt-field"></div>
+      <div><label class="bt-lbl" for="sQuoNext">Next quote no.</label><input id="sQuoNext" type="number" min="1" class="bt-field"></div>
+      <div><label class="bt-lbl" for="sPad">Digits</label><input id="sPad" type="number" min="1" max="8" class="bt-field"></div>
+    </div>
+    <button id="saveNumBtn" class="save-btn" style="margin-top:14px">Save numbering</button>
+  </div>
+
+  <div class="bt-panel">
+    <h3>Payment accounts</h3>
+    <p class="hint">The choices offered when marking an invoice paid. One per line.</p>
+    <textarea id="sAccounts" class="bt-field" rows="4"></textarea>
+    <button id="saveAccBtn" class="save-btn" style="margin-top:12px">Save accounts</button>
+  </div>
+
+  <div class="bt-panel">
+    <h3>My signature</h3>
+    <p class="hint">Applied to documents you create. Leave it unset to keep the standard signature already on the form.</p>
+    <div id="mySigPreview" style="margin-bottom:10px"></div>
+    <input id="sSigFile" type="file" accept="image/*" class="bt-field" style="margin-bottom:10px">
+    <button id="saveSigBtn" class="save-btn">Save signature</button>
+    <button id="clearSigBtn" class="alt-btn">Remove</button>
+  </div>
+
+  <div class="bt-panel" id="usersPanel">
+    <h3>Users</h3>
+    <div id="usersWrap"></div>
+    <button id="addUserBtn" class="save-btn" style="margin-top:14px">Add user</button>
+  </div>
+</div>
+</div>
+
+<div class="bt-modal" id="paidModal">
+  <div class="box">
+    <h3>Mark as paid</h3>
+    <div class="row">
+      <label class="bt-lbl" for="pmAccount">Paid into</label>
+      <select id="pmAccount" class="bt-field"></select>
+    </div>
+    <div class="row">
+      <label class="bt-lbl" for="pmDate">Payment date</label>
+      <input id="pmDate" type="date" class="bt-field">
+    </div>
+    <div class="acts">
+      <button class="alt-btn" data-close="paidModal">Cancel</button>
+      <button id="pmUnmark" class="alt-btn danger">Unmark</button>
+      <button id="pmSave" class="save-btn">Mark paid</button>
+    </div>
+  </div>
+</div>
+
+<div class="bt-modal" id="userModal">
+  <div class="box">
+    <h3>Add user</h3>
+    <div class="row"><label class="bt-lbl" for="umUser">Username</label><input id="umUser" class="bt-field" autocapitalize="none" spellcheck="false"></div>
+    <div class="row"><label class="bt-lbl" for="umName">Shown on documents</label><input id="umName" class="bt-field" placeholder="e.g. Counter staff"></div>
+    <div class="row"><label class="bt-lbl" for="umPin">PIN</label><input id="umPin" class="bt-field" inputmode="numeric" placeholder="4-8 digits"></div>
+    <div class="row"><label class="bt-lbl" for="umRole">Role</label>
+      <select id="umRole" class="bt-field">
+        <option value="staff">Staff - create only</option>
+        <option value="admin">Admin - full access</option>
+      </select>
+    </div>
+    <div id="umMsg" style="font-size:12px;color:#C0392B;min-height:17px"></div>
+    <div class="acts">
+      <button class="alt-btn" data-close="userModal">Cancel</button>
+      <button id="umSave" class="save-btn">Create user</button>
+    </div>
+  </div>
+</div>
+
+<div class="bt-modal" id="confirmModal">
+  <div class="box">
+    <h3 id="cmTitle">Are you sure?</h3>
+    <p id="cmBody" style="font-size:13px;color:#777;margin:0"></p>
+    <div class="acts">
+      <button class="alt-btn" data-close="confirmModal">Cancel</button>
+      <button id="cmYes" class="save-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="btToast" role="status" aria-live="polite"></div>
+
 <script>
-  function fitNameField() {
-    var input = document.getElementById('bill-name');
-    var text = input.value || '';
-    var canvas = fitNameField._canvas || (fitNameField._canvas = document.createElement('canvas'));
-    var ctx = canvas.getContext('2d');
-    var cs = window.getComputedStyle(input);
-    ctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-    var textWidth = ctx.measureText(text).width;
-    var minWidth = 160;
-    var bodyWidth = document.querySelector('.inv-body').clientWidth;
-    var stacked = window.innerWidth <= 640;
-    var maxWidth = stacked ? bodyWidth : bodyWidth - 260; // leave room for the No/Date/Date Due box on the right, unless stacked on mobile
-    var newWidth = Math.max(Math.min(minWidth, maxWidth), Math.min(textWidth + 16, maxWidth));
-    input.style.width = newWidth + 'px';
-  }
-  document.getElementById('bill-name').addEventListener('input', fitNameField);
-  window.addEventListener('beforeprint', fitNameField);
-  window.addEventListener('load', fitNameField);
-  window.addEventListener('resize', fitNameField);
+  // The customer name field wraps on its own now - see #bill-name in the
+  // stylesheet. The old canvas width measuring has been removed.
 
   function setPageMargin(mm) {
     var styleTag = document.getElementById('page-margin-style');
@@ -360,10 +605,10 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
   }
 
   function clearForm() {
-    ['inv-no','inv-date','inv-due','bill-name','other'].forEach(function(id) {
+    ['inv-no','inv-date','inv-due','other'].forEach(function(id) {
       document.getElementById(id).value = '';
     });
-    document.getElementById('bill-name').style.width = '220px';
+    document.getElementById('bill-name').textContent = '';
     document.getElementById('gst-toggle').checked = true;
     document.getElementById('discount-toggle').checked = true;
     document.getElementById('items-body').innerHTML = '';
@@ -402,6 +647,662 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
       });
     });
   }
+</script>
+
+<script type="module">
+/* ============================================================
+   Break Time — Firebase layer
+   Adds accounts, roles, saved documents, history and numbering
+   on top of the existing form. The form's own code above is
+   left alone; its functions are wrapped, not edited.
+   ============================================================ */
+import { initializeApp, deleteApp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+         createUserWithEmailAndPassword }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc,
+         collection, getDocs, query, orderBy, runTransaction, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+window.__btReady = true;
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+/* The login screen only shows a username and a PIN. Firebase wants an
+   email and a 6+ character password, so both are derived here and are
+   never shown to anyone. */
+const emailFor = u => `${String(u).trim().toLowerCase()}@breaktime.local`;
+const passFor  = p => `${String(p).trim()}::breaktime`;
+
+const $ = id => document.getElementById(id);
+const todayISO = () => new Date().toISOString().slice(0,10);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const money = n => "MVR " + (Math.round((Number(n)||0)*100)/100)
+  .toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+let toastTimer;
+function toast(m){
+  const t = $("btToast"); t.textContent = m; t.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove("on"), 2600);
+}
+const openModal  = id => $(id).classList.add("on");
+const closeModal = id => $(id).classList.remove("on");
+document.querySelectorAll("[data-close]").forEach(b =>
+  b.addEventListener("click", ()=>closeModal(b.dataset.close)));
+
+function confirmAction(title, body, label, onYes){
+  $("cmTitle").textContent = title;
+  $("cmBody").textContent  = body;
+  const old = $("cmYes"), btn = old.cloneNode(true);
+  btn.textContent = label;
+  old.replaceWith(btn);
+  btn.addEventListener("click", ()=>{ closeModal("confirmModal"); onYes(); });
+  openModal("confirmModal");
+}
+
+/* ---------- state ---------- */
+const S = { me:null, num:null, accounts:[], docId:null, type:"invoice", paid:null, dirty:false, docs:[] };
+const isAdmin = () => S.me?.role === "admin";
+const DEFAULT_SIG = document.querySelector(".signature-img")?.src || "";
+
+function setDirty(v){
+  S.dirty = v;
+  $("dirtyFlag").textContent = v ? "Unsaved" : "";
+}
+
+/* ---------- wrap the form's own functions instead of editing them ---------- */
+const _recalc    = window.recalc;
+const _addRow    = window.addRow;
+const _delRow    = window.delRow;
+const _clearForm = window.clearForm;
+const _switchDoc = window.switchDoc;
+
+window.recalc = function(){ _recalc(); setDirty(true); };
+window.addRow = function(){ _addRow(); setDirty(true); };
+window.delRow = function(b){ _delRow(b); setDirty(true); };
+window.switchDoc = function(label, btn){
+  _switchDoc(label, btn);
+  S.type = label === "QUOTATION" ? "quote" : "invoice";
+  S.docId = null;
+  applyType();
+  previewNumberIntoField();
+  setPaid(null);
+  setDirty(true);
+  updateButtons();
+};
+window.clearForm = function(){
+  _clearForm();
+  S.docId = null;
+  setPaid(null);
+  previewNumberIntoField();
+  applySignature(S.me?.signature || DEFAULT_SIG);
+  setDirty(false);
+  updateButtons();
+};
+
+/* ---------- document type ---------- */
+function applyType(){
+  const inv = S.type === "invoice";
+  $("btPaid").style.display = inv ? "" : "none";
+  $("btConv").style.display = inv ? "none" : "";
+  document.querySelectorAll(".meta-row").forEach(r => {
+    if(r.textContent.trim().startsWith("Date Due")) r.style.display = inv ? "" : "none";
+  });
+  const tabs = document.querySelectorAll(".tab");
+  tabs.forEach(t => t.classList.remove("active"));
+  (inv ? tabs[0] : tabs[1])?.classList.add("active");
+  $("doc-type-label").textContent = inv ? "TAX INVOICE" : "QUOTATION";
+}
+
+function setPaid(p){
+  S.paid = p;
+  const st = $("paidStamp");
+  if(p){
+    st.classList.add("on");
+    $("stampDetail").textContent = [p.account, p.date].filter(Boolean).join(" \u00b7 ");
+    $("btPaid").textContent = "Paid \u2713";
+  } else {
+    st.classList.remove("on");
+    $("stampDetail").textContent = "";
+    $("btPaid").textContent = "Mark paid";
+  }
+}
+
+function applySignature(src){
+  const img = document.querySelector(".signature-img");
+  if(img) img.src = src || DEFAULT_SIG;
+}
+
+/* ---------- numbering ---------- */
+function previewNumber(type){
+  const n = S.num || {};
+  const pad = Number(n.pad) || 3;
+  const pre = type === "invoice" ? (n.invPrefix ?? "") : (n.quoPrefix ?? "Q");
+  const nxt = type === "invoice" ? (n.invNext ?? 1) : (n.quoNext ?? 1);
+  return pre + String(nxt).padStart(pad, "0");
+}
+function previewNumberIntoField(){
+  if(!S.docId) $("inv-no").value = previewNumber(S.type);
+}
+
+/* Claimed in a transaction so two devices can't take the same number. */
+async function claimNumber(type){
+  const ref = doc(db, "config", "numbering");
+  return await runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    const n = snap.exists() ? snap.data()
+            : { invPrefix:"", quoPrefix:"Q", invNext:1, quoNext:1, pad:3 };
+    const pad = Number(n.pad) || 3;
+    const key = type === "invoice" ? "invNext" : "quoNext";
+    const pre = type === "invoice" ? (n.invPrefix ?? "") : (n.quoPrefix ?? "Q");
+    const cur = Number(n[key]) || 1;
+    tx.set(ref, { ...n, [key]: cur + 1 }, { merge:true });
+    S.num = { ...n, [key]: cur + 1 };
+    return pre + String(cur).padStart(pad, "0");
+  });
+}
+
+/* ---------- read & write the form ---------- */
+function readItems(){
+  return [...document.querySelectorAll(".item-row")].map(r => ({
+    desc:  r.querySelector(".desc").value.trim(),
+    price: Number(r.querySelector(".price").value) || 0,
+    qty:   Number(r.querySelector(".qty").value)   || 0
+  })).filter(i => i.desc || i.price || i.qty);
+}
+
+function collectDoc(){
+  const items = readItems();
+  const sub = items.reduce((a,i)=>a + i.price*i.qty, 0);
+  const gstOn = $("gst-toggle").checked;
+  const discOn = $("discount-toggle").checked;
+  const gst = gstOn ? sub * 0.08 : 0;
+  const disc = discOn ? (Number($("other").value) || 0) : 0;
+  const r2 = v => Math.round(v*100)/100;
+  return {
+    type: S.type,
+    customer: { name: $("bill-name").textContent.trim() },
+    number: $("inv-no").value.trim(),
+    date: $("inv-date").value || todayISO(),
+    due:  S.type === "invoice" ? ($("inv-due").value || "") : "",
+    items,
+    gstEnabled: gstOn, gstAmount: r2(gst),
+    discountEnabled: discOn, discount: r2(disc),
+    subtotal: r2(sub), total: r2(sub + gst - disc),
+    paid: S.paid || null
+  };
+}
+
+function loadDoc(d){
+  S.docId = d.id;
+  S.type  = d.type;
+  applyType();
+  $("bill-name").textContent = d.customer?.name || "";
+  $("inv-no").value    = d.number || "";
+  $("inv-date").value  = d.date || todayISO();
+  $("inv-due").value   = d.due || "";
+  $("gst-toggle").checked      = d.gstEnabled !== false;
+  $("discount-toggle").checked = d.discountEnabled !== false;
+  $("other").value = d.discount || "";
+  $("items-body").innerHTML = "";
+  (d.items?.length ? d.items : [null,null,null]).forEach(it => {
+    _addRow();
+    if(!it) return;
+    const r = document.querySelectorAll(".item-row");
+    const row = r[r.length-1];
+    row.querySelector(".desc").value  = it.desc  ?? "";
+    row.querySelector(".price").value = it.price || "";
+    row.querySelector(".qty").value   = it.qty   || "";
+  });
+  setPaid(d.paid || null);
+  applySignature(d.signature || DEFAULT_SIG);
+  _recalc();
+  setDirty(false);
+  updateButtons();
+  showView("doc");
+}
+
+async function saveDoc(){
+  const payload = collectDoc();
+  if(!payload.customer.name){ toast("Add a customer name first"); $("bill-name").focus(); return; }
+  if(!payload.items.length){ toast("Add at least one item"); return; }
+  try{
+    if(S.docId){
+      if(!isAdmin()){ toast("Only an admin can change a saved document"); return; }
+      await updateDoc(doc(db,"documents",S.docId),
+        { ...payload, updatedAt: serverTimestamp(), updatedBy: S.me.username });
+      toast("Saved");
+    } else {
+      const number = await claimNumber(S.type);
+      const ref = await addDoc(collection(db,"documents"), {
+        ...payload, number,
+        signature: S.me.signature || null,
+        createdBy: S.me.username,
+        createdByName: S.me.displayName || S.me.username,
+        createdAt: serverTimestamp()
+      });
+      S.docId = ref.id;
+      $("inv-no").value = number;
+      toast("Saved as " + number);
+    }
+    setDirty(false);
+    updateButtons();
+    await loadHistory();
+  }catch(e){ console.error(e); toast(friendly(e)); }
+}
+
+function removeDoc(){
+  if(!S.docId || !isAdmin()) return;
+  confirmAction("Delete this document?",
+    "It will be removed for everyone. This can't be undone.", "Delete", async ()=>{
+    try{
+      await deleteDoc(doc(db,"documents",S.docId));
+      toast("Deleted");
+      window.clearForm();
+      await loadHistory();
+    }catch(e){ toast(friendly(e)); }
+  });
+}
+
+function convertToInvoice(){
+  const from = $("inv-no").value;
+  S.type = "invoice";
+  S.docId = null;
+  applyType();
+  previewNumberIntoField();
+  $("inv-date").value = todayISO();
+  setPaid(null);
+  setDirty(true);
+  updateButtons();
+  toast("Converted from " + from + " \u2014 save to assign an invoice number");
+}
+
+function friendly(e){
+  const c = e?.code || "";
+  if(c.includes("permission-denied")) return "You don't have permission for that";
+  if(c.includes("wrong-password") || c.includes("invalid-credential") || c.includes("user-not-found"))
+    return "Username or PIN is wrong";
+  if(c.includes("email-already-in-use")) return "That username is taken";
+  if(c.includes("too-many-requests")) return "Too many tries. Wait a minute.";
+  if(c.includes("network")) return "No connection \u2014 check your internet";
+  return "Something went wrong. Try again.";
+}
+
+/* ---------- history ---------- */
+async function loadHistory(){
+  try{
+    const snap = await getDocs(query(collection(db,"documents"), orderBy("date","desc")));
+    S.docs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    renderHistory();
+  }catch(e){
+    $("histWrap").innerHTML = `<div class="bt-empty">${esc(friendly(e))}</div>`;
+  }
+}
+
+function renderHistory(){
+  const fT = $("fType").value, fP = $("fPaid").value;
+  const from = $("fFrom").value, to = $("fTo").value;
+  const q = $("fText").value.trim().toLowerCase();
+
+  const rows = S.docs.filter(d => {
+    if(fT && d.type !== fT) return false;
+    if(fP === "paid" && !d.paid) return false;
+    if(fP === "unpaid" && d.paid) return false;
+    if(from && (d.date||"") < from) return false;
+    if(to   && (d.date||"") > to)   return false;
+    if(q && !`${d.number||""} ${d.customer?.name||""}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if(!rows.length){
+    $("histWrap").innerHTML = `<div class="bt-empty">No documents match these filters.</div>`;
+    return;
+  }
+  $("histWrap").innerHTML = `
+    <table class="bt-list">
+      <thead><tr><th>No.</th><th>Date</th><th>Customer</th>
+      <th style="text-align:right">Total</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows.map(d => `
+        <tr>
+          <td data-l="No."><span class="bt-chip ${d.type==="invoice"?"inv":"quo"}">${esc(d.number||"\u2014")}</span></td>
+          <td data-l="Date">${esc(d.date||"")}</td>
+          <td data-l="Customer">${esc(d.customer?.name||"")}</td>
+          <td data-l="Total" class="bt-num">${money(d.total)}</td>
+          <td data-l="Status">${d.paid ? `<span class="bt-chip paid">Paid</span>`
+                       : (d.type==="invoice" ? `<span class="bt-chip">Unpaid</span>` : "")}</td>
+          <td class="bt-act"><button class="bt-open" data-open="${d.id}">Open</button></td>
+        </tr>`).join("")}</tbody></table>`;
+
+  $("histWrap").querySelectorAll("[data-open]").forEach(b =>
+    b.addEventListener("click", ()=>{
+      const d = S.docs.find(x => x.id === b.dataset.open);
+      if(!d) return;
+      if(S.dirty) confirmAction("Open this document?",
+        "Your unsaved changes will be lost.", "Open", ()=>loadDoc(d));
+      else loadDoc(d);
+    }));
+}
+["fType","fPaid","fFrom","fTo","fText"].forEach(id =>
+  $(id).addEventListener("input", renderHistory));
+
+/* ---------- settings ---------- */
+async function loadConfig(){
+  const [n, a] = await Promise.all([
+    getDoc(doc(db,"config","numbering")),
+    getDoc(doc(db,"config","accounts"))
+  ]);
+  S.num = n.exists() ? n.data()
+        : { invPrefix:"", quoPrefix:"Q", invNext:1, quoNext:1, pad:3 };
+  S.accounts = a.exists() ? (a.data().list || [])
+        : ["Bank of Maldives \u2014 7770000247183", "Cash"];
+  fillSettings();
+  fillAccountSelect();
+}
+
+function fillSettings(){
+  const n = S.num || {};
+  $("sInvPrefix").value = n.invPrefix ?? "";
+  $("sInvNext").value   = n.invNext ?? 1;
+  $("sQuoPrefix").value = n.quoPrefix ?? "Q";
+  $("sQuoNext").value   = n.quoNext ?? 1;
+  $("sPad").value       = n.pad ?? 3;
+  $("sAccounts").value  = (S.accounts || []).join("\n");
+}
+
+function fillAccountSelect(){
+  $("pmAccount").innerHTML = `<option value="">\u2014</option>` +
+    (S.accounts||[]).map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+}
+
+$("saveNumBtn").addEventListener("click", async ()=>{
+  if(!isAdmin()){ toast("Only an admin can change numbering"); return; }
+  const payload = {
+    invPrefix: $("sInvPrefix").value.trim(),
+    quoPrefix: $("sQuoPrefix").value.trim(),
+    invNext: Math.max(1, Number($("sInvNext").value)||1),
+    quoNext: Math.max(1, Number($("sQuoNext").value)||1),
+    pad: Math.min(8, Math.max(1, Number($("sPad").value)||3))
+  };
+  try{
+    await setDoc(doc(db,"config","numbering"), payload, { merge:true });
+    S.num = payload;
+    previewNumberIntoField();
+    toast("Numbering saved");
+  }catch(e){ toast(friendly(e)); }
+});
+
+$("saveAccBtn").addEventListener("click", async ()=>{
+  if(!isAdmin()){ toast("Only an admin can change accounts"); return; }
+  const list = $("sAccounts").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  try{
+    await setDoc(doc(db,"config","accounts"), { list }, { merge:true });
+    S.accounts = list; fillAccountSelect();
+    toast("Accounts saved");
+  }catch(e){ toast(friendly(e)); }
+});
+
+function readImage(file, maxPx){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onerror = () => rej(new Error("read failed"));
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width*s); c.height = Math.round(img.height*s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        res(c.toDataURL("image/png"));
+      };
+      img.onerror = () => rej(new Error("not an image"));
+      img.src = r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+$("saveSigBtn").addEventListener("click", async ()=>{
+  const f = $("sSigFile").files?.[0];
+  if(!f){ toast("Choose an image first"); return; }
+  try{
+    const url = await readImage(f, 600);
+    await updateDoc(doc(db,"users",S.me.uid), { signature: url });
+    S.me.signature = url;
+    applySignature(url);
+    showSigPreview(url);
+    toast("Signature saved");
+  }catch(e){ toast(friendly(e)); }
+});
+
+$("clearSigBtn").addEventListener("click", async ()=>{
+  try{
+    await updateDoc(doc(db,"users",S.me.uid), { signature: null });
+    S.me.signature = null;
+    applySignature(DEFAULT_SIG);
+    showSigPreview(null);
+    toast("Back to the standard signature");
+  }catch(e){ toast(friendly(e)); }
+});
+
+function showSigPreview(url){
+  $("mySigPreview").innerHTML = url
+    ? `<img alt="" style="max-height:60px">`
+    : `<span style="font-size:12px;color:#999">Using the standard signature.</span>`;
+  if(url) $("mySigPreview").querySelector("img").src = url;
+}
+
+/* ---------- users ---------- */
+async function loadUsers(){
+  if(!isAdmin()){ $("usersPanel").style.display = "none"; return; }
+  $("usersPanel").style.display = "";
+  try{
+    const snap = await getDocs(collection(db,"users"));
+    const us = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    $("usersWrap").innerHTML = `
+      <table class="bt-list">
+        <thead><tr><th>Username</th><th>Shown as</th><th>Role</th><th></th></tr></thead>
+        <tbody>${us.map(u => `
+          <tr><td data-l="Username">${esc(u.username||"")}</td><td data-l="Shown as">${esc(u.displayName||"")}</td>
+          <td data-l="Role">${esc(u.role||"staff")}</td>
+          <td class="bt-act">${u.id === S.me.uid ? `<span class="bt-chip">You</span>`
+            : `<button class="bt-open" data-role="${u.id}" data-cur="${esc(u.role||"staff")}">Make ${u.role==="admin"?"staff":"admin"}</button>`}
+          </td></tr>`).join("")}</tbody></table>`;
+    $("usersWrap").querySelectorAll("[data-role]").forEach(b =>
+      b.addEventListener("click", async ()=>{
+        try{
+          await updateDoc(doc(db,"users",b.dataset.role),
+            { role: b.dataset.cur === "admin" ? "staff" : "admin" });
+          toast("Role updated"); loadUsers();
+        }catch(e){ toast(friendly(e)); }
+      }));
+  }catch(e){ $("usersWrap").innerHTML = `<div class="bt-empty">${esc(friendly(e))}</div>`; }
+}
+
+$("addUserBtn").addEventListener("click", ()=>{
+  ["umUser","umName","umPin"].forEach(id => $(id).value = "");
+  $("umRole").value = "staff"; $("umMsg").textContent = "";
+  openModal("userModal");
+});
+
+/* Creating an account signs you in as it, so it happens on a
+   throwaway secondary Firebase app and is torn down after. */
+$("umSave").addEventListener("click", async ()=>{
+  const username = $("umUser").value.trim().toLowerCase();
+  const displayName = $("umName").value.trim();
+  const pin = $("umPin").value.trim();
+  if(!/^[a-z0-9._-]{2,20}$/.test(username)){
+    $("umMsg").textContent = "2-20 characters: letters, numbers, . _ - only"; return; }
+  if(!/^\d{4,8}$/.test(pin)){ $("umMsg").textContent = "PIN must be 4-8 digits"; return; }
+  $("umSave").disabled = true;
+  let secondary;
+  try{
+    secondary = initializeApp(firebaseConfig, "mk" + Date.now());
+    const cred = await createUserWithEmailAndPassword(
+      getAuth(secondary), emailFor(username), passFor(pin));
+    await setDoc(doc(db,"users",cred.user.uid), {
+      username, displayName: displayName || username,
+      role: $("umRole").value, signature: null, active: true
+    });
+    closeModal("userModal"); toast("User created"); loadUsers();
+  }catch(e){ $("umMsg").textContent = friendly(e); }
+  finally{
+    $("umSave").disabled = false;
+    if(secondary){ try{ await signOut(getAuth(secondary)); await deleteApp(secondary); }catch{} }
+  }
+});
+
+/* ---------- paid stamp ---------- */
+$("btPaid").addEventListener("click", ()=>{
+  if(S.type !== "invoice") return;
+  if(!isAdmin()){ toast("Only an admin can change payment status"); return; }
+  $("pmAccount").value = S.paid?.account || "";
+  $("pmDate").value = S.paid?.date || todayISO();
+  $("pmUnmark").style.display = S.paid ? "" : "none";
+  openModal("paidModal");
+});
+
+$("pmSave").addEventListener("click", async ()=>{
+  const p = { account: $("pmAccount").value, date: $("pmDate").value || todayISO() };
+  setPaid(p); closeModal("paidModal");
+  if(S.docId){
+    try{ await updateDoc(doc(db,"documents",S.docId), { paid:p, updatedAt:serverTimestamp() });
+         toast("Marked paid"); await loadHistory(); }
+    catch(e){ toast(friendly(e)); }
+  } else { setDirty(true); toast("Marked paid \u2014 save to keep it"); }
+});
+
+$("pmUnmark").addEventListener("click", async ()=>{
+  setPaid(null); closeModal("paidModal");
+  if(S.docId){
+    try{ await updateDoc(doc(db,"documents",S.docId), { paid:null, updatedAt:serverTimestamp() });
+         toast("Payment removed"); await loadHistory(); }
+    catch(e){ toast(friendly(e)); }
+  } else setDirty(true);
+});
+
+/* ---------- views & buttons ---------- */
+function showView(v){
+  document.querySelector(".tabs").style.display   = v==="doc" ? "" : "none";
+  document.querySelector(".invoice").style.display = v==="doc" ? "" : "none";
+  document.querySelector(".actions").style.display = v==="doc" ? "" : "none";
+  $("historyView").style.display  = v==="hist" ? "" : "none";
+  $("settingsView").style.display = v==="set"  ? "" : "none";
+  $("navDoc").setAttribute("aria-pressed", v==="doc");
+  $("navHist").setAttribute("aria-pressed", v==="hist");
+  $("navSet").setAttribute("aria-pressed", v==="set");
+  if(v==="hist") loadHistory();
+  if(v==="set")  loadUsers();
+}
+$("navDoc").addEventListener("click", ()=>showView("doc"));
+$("navHist").addEventListener("click", ()=>showView("hist"));
+$("navSet").addEventListener("click", ()=>showView("set"));
+
+function updateButtons(){
+  const saved = !!S.docId, admin = isAdmin();
+  $("btDel").disabled  = !saved || !admin;
+  $("btPaid").disabled = !admin;
+  $("btSave").disabled = saved && !admin;
+  $("btSave").textContent = saved ? "Save changes" : "Save";
+}
+
+$("btSave").addEventListener("click", saveDoc);
+$("btDel").addEventListener("click", removeDoc);
+$("btConv").addEventListener("click", convertToInvoice);
+["inv-no","inv-date","inv-due","other"].forEach(id =>
+  $(id).addEventListener("input", ()=>setDirty(true)));
+
+/* Plain text only: strip pasted formatting, and no hard line breaks - the
+   field wraps by itself when it runs out of width. */
+const nameEl = $("bill-name");
+nameEl.addEventListener("input", ()=>setDirty(true));
+nameEl.addEventListener("keydown", e => { if(e.key === "Enter") e.preventDefault(); });
+nameEl.addEventListener("paste", e => {
+  e.preventDefault();
+  const t = (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ");
+  document.execCommand("insertText", false, t);
+});
+["gst-toggle","discount-toggle"].forEach(id =>
+  $(id).addEventListener("change", ()=>setDirty(true)));
+document.getElementById("items-body").addEventListener("input", ()=>setDirty(true));
+
+window.addEventListener("beforeunload", e => {
+  if(S.dirty && !S.docId){ e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ---------- auth ---------- */
+async function doLogin(){
+  const u = $("userInput").value.trim(), p = $("pinInput").value.trim();
+  $("loginMsg").textContent = "";
+  if(!u || !p){ $("loginMsg").textContent = "Enter your username and PIN"; return; }
+  $("loginBtn").disabled = true;
+  try{ await signInWithEmailAndPassword(auth, emailFor(u), passFor(p)); }
+  catch(e){ $("loginMsg").textContent = friendly(e); }
+  finally{ $("loginBtn").disabled = false; }
+}
+$("loginBtn").addEventListener("click", doLogin);
+[$("userInput"), $("pinInput")].forEach(el =>
+  el.addEventListener("keydown", e => { if(e.key === "Enter") doLogin(); }));
+
+$("logoutBtn").addEventListener("click", ()=>{
+  if(S.dirty && !S.docId)
+    confirmAction("Sign out?", "Your unsaved document will be lost.", "Sign out", ()=>signOut(auth));
+  else signOut(auth);
+});
+
+onAuthStateChanged(auth, async user => {
+  if(!user){
+    S.me = null;
+    $("loginView").style.display = "flex";
+    $("appView").style.display = "none";
+    $("pinInput").value = "";
+    return;
+  }
+  try{
+    const snap = await getDoc(doc(db,"users",user.uid));
+    if(!snap.exists()){
+      $("loginMsg").textContent = "This account has no profile yet. Ask an admin to set it up.";
+      await signOut(auth); return;
+    }
+    S.me = { uid:user.uid, ...snap.data() };
+  }catch(e){
+    $("loginMsg").textContent = friendly(e);
+    await signOut(auth); return;
+  }
+
+  $("loginView").style.display = "none";
+  $("appView").style.display = "block";
+  $("whoLabel").textContent = `${S.me.displayName || S.me.username} \u00b7 ${S.me.role}`;
+  showSigPreview(S.me.signature || null);
+  applySignature(S.me.signature || DEFAULT_SIG);
+
+  await loadConfig();
+  S.type = "invoice";
+  S.docId = null;
+  applyType();
+  previewNumberIntoField();
+  setDirty(false);
+  updateButtons();
+  showView("doc");
+  loadHistory();
+});
+</script>
+
+
+<script>
+  // If the Firebase module fails to load - no connection, or firebase-config.js
+  // not filled in - say so rather than leaving a button that does nothing.
+  setTimeout(function () {
+    if (!window.__btReady) {
+      var m = document.getElementById('loginMsg');
+      if (m) m.textContent = 'Can\u2019t reach the server. Check your connection, or that firebase-config.js is filled in.';
+      var b = document.getElementById('loginBtn');
+      if (b) b.disabled = true;
+    }
+  }, 8000);
 </script>
 </body>
 </html>
