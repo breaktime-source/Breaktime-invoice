@@ -173,7 +173,16 @@
      Firebase layer: login, top bar, history, settings, stamp.
      The invoice design above is untouched.
      ------------------------------------------------------------ */
-  #loginView { min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  /* Hidden until Firebase reports whether there is a session, otherwise the
+     login card flashes on every load for someone already signed in. */
+  #loginView { min-height: 80vh; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #bootView { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
+  #bootView .dot { width: 9px; height: 9px; border-radius: 50%; background: #C0392B;
+    margin: 0 4px; display: inline-block; animation: btPulse 1.1s ease-in-out infinite; }
+  #bootView .dot:nth-child(2) { animation-delay: .16s; }
+  #bootView .dot:nth-child(3) { animation-delay: .32s; }
+  @keyframes btPulse { 0%,80%,100% { opacity:.25; transform:scale(.8) } 40% { opacity:1; transform:scale(1) } }
+  @media (prefers-reduced-motion: reduce) { #bootView .dot { animation: none; opacity: .6; } }
   .login-card { width: 100%; max-width: 330px; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.10); padding: 26px 24px 22px; }
   .login-card h1 { font-size: 20px; color: #C0392B; margin-bottom: 2px; }
   .login-card .sub { font-size: 13px; color: #888; margin-bottom: 20px; }
@@ -200,13 +209,40 @@
 
   .bt-panel { max-width: 750px; margin: 0 auto 14px; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,0.10); padding: 18px 20px; }
   .bt-panel h3 { font-size: 15px; color: #C0392B; margin-bottom: 14px; }
+  .bt-count { font-size: 12px; font-weight: 400; color: #aaa; margin-left: 6px; }
   .bt-panel .hint { font-size: 12px; color: #888; margin: -8px 0 14px; }
   .bt-grid { display: flex; gap: 10px; flex-wrap: wrap; }
   .bt-grid > div { flex: 1; min-width: 120px; }
   .bt-field { width: 100%; border: 1.5px solid #ddd; border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; background: #fff; }
   .bt-field:focus { border-color: #C0392B; }
   .bt-lbl { display: block; font-size: 10px; font-weight: 700; color: #888; margin-bottom: 3px; }
-  .bt-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bt-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .bt-search { margin-bottom: 10px; font-size: 14px; padding: 10px 12px; }
+  .bt-toggle { padding: 8px 12px; border: 1.5px solid #ddd; border-radius: 8px; background: #fff;
+    color: #666; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .bt-toggle[aria-expanded="true"] { border-color: #C0392B; color: #C0392B; }
+  .bt-daterange { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #888; flex: 1; min-width: 140px; }
+  .bt-daterange .bt-field { flex: 1; }
+  .bt-activefilters { font-size: 12px; color: #888; margin-bottom: 10px; min-height: 0; }
+  .bt-totals { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bt-totals .stat { flex: 1; min-width: 108px; background: #faf7f7; border: 1px solid #f0e6e5;
+    border-radius: 8px; padding: 9px 11px; }
+  .bt-totals .stat .k { font-size: 10px; font-weight: 700; color: #a08a88;
+    letter-spacing: .03em; text-transform: uppercase; }
+  .bt-totals .stat .v { font-size: 15px; font-weight: 700; color: #111; margin-top: 2px;
+    font-variant-numeric: tabular-nums; }
+  .bt-totals .stat.owed .v { color: #C0392B; }
+  .bt-totals .stat.paid .v { color: #1d6b3f; }
+  .bt-totals .note { flex-basis: 100%; font-size: 11px; color: #aaa; margin-top: -4px; }
+  .bt-activefilters button { border: none; background: none; color: #C0392B; cursor: pointer;
+    font-size: 12px; font-weight: 700; text-decoration: underline; padding: 0 0 0 6px; }
+  /* Type reads as a coloured dot rather than a filled chip, so a long list of
+     rows is calmer to scan. */
+  .bt-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+  .bt-dot.inv { background: #C0392B; }
+  .bt-dot.quo { background: #c8a24a; }
+  .bt-no { font-weight: 700; color: #111; }
+  .bt-sub { color: #999; font-size: 11px; }
   .bt-filters .bt-field { width: auto; flex: 1; min-width: 120px; }
 
   table.bt-list { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -241,16 +277,26 @@
   @media screen and (max-width: 640px) {
     .bt-topbar { gap: 6px; }
     .bt-nav { flex: 1; }
-    .bt-nav button { flex: 1; padding: 8px 6px; font-size: 12px; }
-    .bt-out { padding: 8px 10px; }
+    .bt-nav button { flex: 1; padding: 8px 4px; font-size: 12px; min-height: 40px; }
+    .bt-out { padding: 8px 8px; font-size: 11px; }
     .bt-who { width: 100%; margin-left: 0; text-align: center; order: 9; }
     .bt-dirty { order: 8; }
     .bt-panel { padding: 14px; }
+    /* Native file inputs render a button plus the filename and will push past
+       their container on a narrow screen. */
+    #sSigFile { font-size: 12px; max-width: 100%; }
+    .bt-modal .box { padding: 16px; }
+    .bt-modal .acts button { flex: 1; min-width: 90px; }
 
     /* Six stacked full-width buttons is a lot of scrolling, so they pair up.
        This overrides the form's own .actions column rule. */
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .actions button { width: 100% !important; margin: 0; }
+    /* Long labels like "Convert to invoice" are wider than a half-width
+       button on every common phone, so let them wrap onto a second line and
+       give every button the same floor height so the grid stays even.
+       44px is also the minimum comfortable touch target. */
+    .actions button { width: 100% !important; margin: 0; font-size: 13px;
+      padding: 10px 6px; line-height: 1.25; white-space: normal; min-height: 44px; }
     .margin-select-wrap { grid-column: 1 / -1; }
     .margin-select { max-width: none; }
 
@@ -277,6 +323,9 @@
 
 </head>
 <body>
+<div id="bootView" role="status" aria-label="Loading">
+  <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+</div>
 <div id="loginView">
   <div class="login-card">
     <h1>Break Time</h1>
@@ -443,22 +492,35 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
 
 <div id="historyView" style="display:none">
   <div class="bt-panel">
-    <h3>History</h3>
+    <h3>History <span id="histCount" class="bt-count"></span></h3>
+    <input id="fText" class="bt-field bt-search" placeholder="Search customer or number">
     <div class="bt-filters">
-      <select id="fType" class="bt-field">
+      <select id="fType" class="bt-field" aria-label="Type">
         <option value="">All types</option>
         <option value="invoice">Invoices</option>
         <option value="quote">Quotations</option>
       </select>
-      <select id="fPaid" class="bt-field">
+      <select id="fPaid" class="bt-field" aria-label="Status">
         <option value="">Any status</option>
         <option value="paid">Paid</option>
         <option value="unpaid">Unpaid</option>
       </select>
-      <input id="fFrom" type="date" class="bt-field" aria-label="From date">
-      <input id="fTo" type="date" class="bt-field" aria-label="To date">
-      <input id="fText" class="bt-field" placeholder="Customer or number">
+      <select id="fSort" class="bt-field" aria-label="Sort by">
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+        <option value="num-desc">Number, high to low</option>
+        <option value="num-asc">Number, low to high</option>
+        <option value="total-desc">Largest amount</option>
+        <option value="total-asc">Smallest amount</option>
+      </select>
+      <button id="fDatesBtn" class="bt-toggle" aria-expanded="false">Date range</button>
     </div>
+    <div class="bt-filters" id="fDatesRow" style="display:none">
+      <label class="bt-daterange">From <input id="fFrom" type="date" class="bt-field"></label>
+      <label class="bt-daterange">To <input id="fTo" type="date" class="bt-field"></label>
+    </div>
+    <div id="fActive" class="bt-activefilters"></div>
+    <div id="histTotals" class="bt-totals"></div>
     <div id="histWrap"></div>
   </div>
 </div>
@@ -503,7 +565,7 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
 
 <div class="bt-modal" id="paidModal">
   <div class="box">
-    <h3>Mark as paid</h3>
+    <h3 id="pmTitle">Mark as paid</h3>
     <div class="row">
       <label class="bt-lbl" for="pmAccount">Paid into</label>
       <select id="pmAccount" class="bt-field"></select>
@@ -712,7 +774,8 @@ function confirmAction(title, body, label, onYes){
 }
 
 /* ---------- state ---------- */
-const S = { me:null, num:null, accounts:[], docId:null, type:"invoice", paid:null, dirty:false, docs:[] };
+const S = { me:null, num:null, accounts:[], docId:null, type:"invoice", paid:null,
+            dirty:false, docs:[], saving:false };
 const isAdmin = () => S.me?.role === "admin";
 const DEFAULT_SIG = document.querySelector(".signature-img")?.src || "";
 
@@ -743,6 +806,7 @@ window.switchDoc = function(label, btn){
 };
 window.clearForm = function(){
   _clearForm();
+  $("bill-name").focus();
   S.docId = null;
   setPaid(null);
   previewNumberIntoField();
@@ -874,12 +938,18 @@ function loadDoc(d){
 }
 
 async function saveDoc(){
+  /* A second click while the first save is still in flight would run
+     claimNumber twice and burn two invoice numbers. */
+  if(S.saving) return;
   const payload = collectDoc();
   if(!payload.customer.name){ toast("Add a customer name first"); $("bill-name").focus(); return; }
   if(!payload.items.length){ toast("Add at least one item"); return; }
+  S.saving = true;
+  $("btSave").disabled = true;
+  const savingLabel = $("btSave").textContent;
+  $("btSave").textContent = "Saving\u2026";
   try{
     if(S.docId){
-      if(!isAdmin()){ toast("Only an admin can change a saved document"); return; }
       await updateDoc(doc(db,"documents",S.docId),
         { ...payload, updatedAt: serverTimestamp(), updatedBy: S.me.username });
       toast("Saved");
@@ -897,9 +967,13 @@ async function saveDoc(){
       toast("Saved as " + number);
     }
     setDirty(false);
-    updateButtons();
     await loadHistory();
   }catch(e){ console.error(e); toast(friendly(e)); }
+  finally{
+    S.saving = false;
+    $("btSave").textContent = savingLabel;
+    updateButtons();
+  }
 }
 
 function removeDoc(){
@@ -955,6 +1029,7 @@ function renderHistory(){
   const from = $("fFrom").value, to = $("fTo").value;
   const q = $("fText").value.trim().toLowerCase();
 
+  renderActiveFilters();
   const rows = S.docs.filter(d => {
     if(fT && d.type !== fT) return false;
     if(fP === "paid" && !d.paid) return false;
@@ -965,17 +1040,36 @@ function renderHistory(){
     return true;
   });
 
+  /* Numbers are strings like "046" or "Q011", so compare the digits
+     numerically and fall back to plain text for anything unexpected. */
+  const numOf = d => { const m = String(d.number||"").match(/(\d+)/); return m ? Number(m[1]) : -1; };
+  const dir = $("fSort").value.endsWith("-asc") ? 1 : -1;
+  const key = $("fSort").value.split("-")[0];
+  rows.sort((a,b) => dir * (
+    key === "num"   ? numOf(a) - numOf(b) :
+    key === "total" ? (Number(a.total)||0) - (Number(b.total)||0) :
+                      String(a.date||"").localeCompare(String(b.date||""))
+  ));
+
+  renderTotals(rows);
+
   if(!rows.length){
-    $("histWrap").innerHTML = `<div class="bt-empty">No documents match these filters.</div>`;
+    $("histWrap").innerHTML = S.docs.length
+      ? `<div class="bt-empty">No documents match these filters.</div>`
+      : `<div class="bt-empty">Nothing saved yet. Invoices and quotations appear here once you save them.</div>`;
+    $("histCount").textContent = "";
     return;
   }
+  $("histCount").textContent = rows.length === S.docs.length
+    ? `${S.docs.length} document${S.docs.length === 1 ? "" : "s"}`
+    : `${rows.length} of ${S.docs.length}`;
   $("histWrap").innerHTML = `
     <table class="bt-list">
       <thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Raised by</th>
       <th style="text-align:right">Total</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows.map(d => `
         <tr>
-          <td data-l="No."><span class="bt-chip ${d.type==="invoice"?"inv":"quo"}">${esc(d.number||"\u2014")}</span></td>
+          <td data-l="No."><span class="bt-dot ${d.type==="invoice"?"inv":"quo"}"></span><span class="bt-no">${esc(d.number||"\u2014")}</span></td>
           <td data-l="Date">${esc(d.date||"")}</td>
           <td data-l="Customer">${esc(d.customer?.name||"")}</td>
           <td data-l="Raised by">${esc(d.createdByName || d.createdBy || "\u2014")}</td>
@@ -994,8 +1088,60 @@ function renderHistory(){
       else loadDoc(d);
     }));
 }
-["fType","fPaid","fFrom","fTo","fText"].forEach(id =>
+["fType","fPaid","fFrom","fTo","fText","fSort"].forEach(id =>
   $(id).addEventListener("input", renderHistory));
+
+$("fDatesBtn").addEventListener("click", ()=>{
+  const open = $("fDatesRow").style.display === "none";
+  $("fDatesRow").style.display = open ? "" : "none";
+  $("fDatesBtn").setAttribute("aria-expanded", open);
+  if(!open){ $("fFrom").value = ""; $("fTo").value = ""; renderHistory(); }
+});
+
+/* Says in words what is currently being filtered, so a short list is never
+   mistaken for an empty ledger. */
+/* Totals follow the filters, so narrowing to one month or one customer
+   answers "how much is that worth" without any exporting.
+   Quotations are counted separately: a quote is not money owed. */
+function renderTotals(rows){
+  if(!rows.length){ $("histTotals").innerHTML = ""; return; }
+  const inv = rows.filter(d => d.type === "invoice");
+  const quo = rows.filter(d => d.type !== "invoice");
+  const sum = list => list.reduce((a,d) => a + (Number(d.total) || 0), 0);
+  const paid  = sum(inv.filter(d => d.paid));
+  const owed  = sum(inv.filter(d => !d.paid));
+
+  const stat = (cls, k, v) => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  let html = "";
+  if(inv.length){
+    html += stat("", `Invoiced (${inv.length})`, money(paid + owed));
+    html += stat("paid", "Paid", money(paid));
+    html += stat("owed", "Unpaid", money(owed));
+  }
+  if(quo.length){
+    html += stat("", `Quoted (${quo.length})`, money(sum(quo)));
+    if(inv.length) html += `<div class="note">Quotations are shown separately \u2014 they are not money owed.</div>`;
+  }
+  $("histTotals").innerHTML = html;
+}
+
+function renderActiveFilters(){
+  const bits = [];
+  if($("fText").value.trim()) bits.push(`matching "${$("fText").value.trim()}"`);
+  if($("fType").value) bits.push($("fType").value === "invoice" ? "invoices only" : "quotations only");
+  if($("fPaid").value) bits.push($("fPaid").value === "paid" ? "paid only" : "unpaid only");
+  if($("fFrom").value) bits.push("from " + $("fFrom").value);
+  if($("fTo").value) bits.push("to " + $("fTo").value);
+  $("fActive").innerHTML = bits.length
+    ? `Showing ${esc(bits.join(", "))}<button id="fClear">Clear</button>` : "";
+  const c = $("fClear");
+  if(c) c.addEventListener("click", ()=>{
+    ["fText","fType","fPaid","fFrom","fTo"].forEach(id => $(id).value = "");
+    $("fDatesRow").style.display = "none";
+    $("fDatesBtn").setAttribute("aria-expanded", "false");
+    renderHistory();
+  });
+}
 
 /* ---------- settings ---------- */
 async function loadConfig(){
@@ -1166,7 +1312,9 @@ $("umSave").addEventListener("click", async ()=>{
 /* ---------- paid stamp ---------- */
 $("btPaid").addEventListener("click", ()=>{
   if(S.type !== "invoice") return;
-  if(!isAdmin()){ toast("Only an admin can change payment status"); return; }
+  $("pmTitle").textContent = S.paid
+    ? `Payment for ${$("inv-no").value}`
+    : `Mark ${$("inv-no").value} as paid`;
   $("pmAccount").value = S.paid?.account || "";
   $("pmDate").value = S.paid?.date || todayISO();
   $("pmUnmark").style.display = S.paid ? "" : "none";
@@ -1177,7 +1325,8 @@ $("pmSave").addEventListener("click", async ()=>{
   const p = { account: $("pmAccount").value, date: $("pmDate").value || todayISO() };
   setPaid(p); closeModal("paidModal");
   if(S.docId){
-    try{ await updateDoc(doc(db,"documents",S.docId), { paid:p, updatedAt:serverTimestamp() });
+    try{ await updateDoc(doc(db,"documents",S.docId),
+           { paid:p, updatedAt:serverTimestamp(), updatedBy:S.me.username });
          toast("Marked paid"); await loadHistory(); }
     catch(e){ toast(friendly(e)); }
   } else { setDirty(true); toast("Marked paid \u2014 save to keep it"); }
@@ -1186,7 +1335,8 @@ $("pmSave").addEventListener("click", async ()=>{
 $("pmUnmark").addEventListener("click", async ()=>{
   setPaid(null); closeModal("paidModal");
   if(S.docId){
-    try{ await updateDoc(doc(db,"documents",S.docId), { paid:null, updatedAt:serverTimestamp() });
+    try{ await updateDoc(doc(db,"documents",S.docId),
+           { paid:null, updatedAt:serverTimestamp(), updatedBy:S.me.username });
          toast("Payment removed"); await loadHistory(); }
     catch(e){ toast(friendly(e)); }
   } else setDirty(true);
@@ -1212,12 +1362,33 @@ $("navSet").addEventListener("click", ()=>showView("set"));
 function updateButtons(){
   const saved = !!S.docId, admin = isAdmin();
   $("btDel").disabled  = !saved || !admin;
-  $("btPaid").disabled = !admin;
-  $("btSave").disabled = saved && !admin;
+  $("btPaid").disabled = false;
+  $("btSave").disabled = false;
   $("btSave").textContent = saved ? "Save changes" : "Save";
+  /* Renumbering a saved document would break the sequence, so only an admin
+     can touch the number once it has been assigned. */
+  $("inv-no").readOnly = saved && !admin;
+  $("inv-no").title = (saved && !admin) ? "Only an admin can change the number" : "";
 }
 
-$("btSave").addEventListener("click", saveDoc);
+/* Save is next to Delete and Convert in the button grid and is easy to catch
+   by accident, so it asks first. Validation runs before the prompt, otherwise
+   you would confirm and then be told the form is incomplete. */
+$("btSave").addEventListener("click", ()=>{
+  if(S.saving) return;
+  if(!$("bill-name").textContent.trim()){
+    toast("Add a customer name first"); $("bill-name").focus(); return; }
+  if(!readItems().length){ toast("Add at least one item"); return; }
+  const kind = S.type === "invoice" ? "invoice" : "quotation";
+  if(S.docId){
+    confirmAction("Save changes?",
+      `This updates ${kind} ${$("inv-no").value}.`, "Save changes", saveDoc);
+  } else {
+    confirmAction(`Save this ${kind}?`,
+      `It will be given number ${previewNumber(S.type)}. That number is used up once saved, `
+      + `even if you delete the ${kind} afterwards.`, "Save", saveDoc);
+  }
+});
 $("btDel").addEventListener("click", removeDoc);
 $("btConv").addEventListener("click", convertToInvoice);
 ["inv-no","inv-date","inv-due","other"].forEach(id =>
@@ -1247,9 +1418,10 @@ async function doLogin(){
   $("loginMsg").textContent = "";
   if(!u || !p){ $("loginMsg").textContent = "Enter your username and PIN"; return; }
   $("loginBtn").disabled = true;
+  $("loginBtn").textContent = "Signing in\u2026";
   try{ await signInWithEmailAndPassword(auth, emailFor(u), passFor(p)); }
-  catch(e){ $("loginMsg").textContent = friendly(e); }
-  finally{ $("loginBtn").disabled = false; }
+  catch(e){ $("loginMsg").textContent = friendly(e); $("pinInput").select(); }
+  finally{ $("loginBtn").disabled = false; $("loginBtn").textContent = "Sign in"; }
 }
 $("loginBtn").addEventListener("click", doLogin);
 [$("userInput"), $("pinInput")].forEach(el =>
@@ -1262,11 +1434,13 @@ $("logoutBtn").addEventListener("click", ()=>{
 });
 
 onAuthStateChanged(auth, async user => {
+  $("bootView").style.display = "none";
   if(!user){
     S.me = null;
     $("loginView").style.display = "flex";
     $("appView").style.display = "none";
     $("pinInput").value = "";
+    $("userInput").focus();
     return;
   }
   try{
@@ -1305,6 +1479,10 @@ onAuthStateChanged(auth, async user => {
   // not filled in - say so rather than leaving a button that does nothing.
   setTimeout(function () {
     if (!window.__btReady) {
+      var boot = document.getElementById('bootView');
+      if (boot) boot.style.display = 'none';
+      var lv = document.getElementById('loginView');
+      if (lv) lv.style.display = 'flex';
       var m = document.getElementById('loginMsg');
       if (m) m.textContent = 'Can\u2019t reach the server. Check your connection, or that firebase-config.js is filled in.';
       var b = document.getElementById('loginBtn');
