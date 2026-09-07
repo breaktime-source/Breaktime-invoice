@@ -1,4 +1,4 @@
-const CACHE_NAME = 'breaktime-invoice-v4';
+const CACHE_NAME = 'breaktime-invoice-v5';
 const ASSETS = [
   './index.html',
   './manifest.json',
