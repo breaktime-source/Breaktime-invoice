@@ -243,6 +243,12 @@
   .bt-dot.quo { background: #c8a24a; }
   .bt-no { font-weight: 700; color: #111; }
   .bt-sub { color: #999; font-size: 11px; }
+  .acc-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .acc-row .bt-field { flex: 1; }
+  .acc-row .rm { border: none; background: none; color: #c3ccca; font-size: 20px;
+    cursor: pointer; padding: 4px 8px; line-height: 1; }
+  .acc-row .rm:hover { color: #C0392B; }
+  .acc-used { font-size: 11px; color: #aaa; white-space: nowrap; }
   .bt-filters .bt-field { width: auto; flex: 1; min-width: 120px; }
 
   table.bt-list { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -505,6 +511,9 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
         <option value="paid">Paid</option>
         <option value="unpaid">Unpaid</option>
       </select>
+      <select id="fAccount" class="bt-field" aria-label="Paid via">
+        <option value="">Any method</option>
+      </select>
       <select id="fSort" class="bt-field" aria-label="Sort by">
         <option value="date-desc">Newest first</option>
         <option value="date-asc">Oldest first</option>
@@ -541,9 +550,11 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
 
   <div class="bt-panel">
     <h3>Payment accounts</h3>
-    <p class="hint">The choices offered when marking an invoice paid. One per line.</p>
-    <textarea id="sAccounts" class="bt-field" rows="4"></textarea>
-    <button id="saveAccBtn" class="save-btn" style="margin-top:12px">Save accounts</button>
+    <p class="hint">The choices offered when marking an invoice paid. Renaming one
+      updates it on every invoice that used it, including old ones.</p>
+    <div id="accRows"></div>
+    <button id="addAccBtn" class="alt-btn" style="margin-top:10px">Add account</button>
+    <button id="saveAccBtn" class="save-btn" style="margin-top:10px">Save accounts</button>
   </div>
 
   <div class="bt-panel">
@@ -834,7 +845,7 @@ function setPaid(p){
   const st = $("paidStamp");
   if(p){
     st.classList.add("on");
-    $("stampDetail").textContent = [p.account, p.date].filter(Boolean).join(" \u00b7 ");
+    $("stampDetail").textContent = [accountName(p), p.date].filter(Boolean).join(" \u00b7 ");
     $("btPaid").textContent = "Paid \u2713";
   } else {
     st.classList.remove("on");
@@ -1025,7 +1036,7 @@ async function loadHistory(){
 }
 
 function renderHistory(){
-  const fT = $("fType").value, fP = $("fPaid").value;
+  const fT = $("fType").value, fP = $("fPaid").value, fAcc = $("fAccount").value;
   const from = $("fFrom").value, to = $("fTo").value;
   const q = $("fText").value.trim().toLowerCase();
 
@@ -1034,6 +1045,7 @@ function renderHistory(){
     if(fT && d.type !== fT) return false;
     if(fP === "paid" && !d.paid) return false;
     if(fP === "unpaid" && d.paid) return false;
+    if(fAcc && d.paid?.accountId !== fAcc) return false;
     if(from && (d.date||"") < from) return false;
     if(to   && (d.date||"") > to)   return false;
     if(q && !`${d.number||""} ${d.customer?.name||""}`.toLowerCase().includes(q)) return false;
@@ -1066,7 +1078,7 @@ function renderHistory(){
   $("histWrap").innerHTML = `
     <table class="bt-list">
       <thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Raised by</th>
-      <th style="text-align:right">Total</th><th>Status</th><th></th></tr></thead>
+      <th style="text-align:right">Total</th><th>Status</th><th>Paid via</th><th></th></tr></thead>
       <tbody>${rows.map(d => `
         <tr>
           <td data-l="No."><span class="bt-dot ${d.type==="invoice"?"inv":"quo"}"></span><span class="bt-no">${esc(d.number||"\u2014")}</span></td>
@@ -1076,6 +1088,7 @@ function renderHistory(){
           <td data-l="Total" class="bt-num">${money(d.total)}</td>
           <td data-l="Status">${d.paid ? `<span class="bt-chip paid">Paid</span>`
                        : (d.type==="invoice" ? `<span class="bt-chip">Unpaid</span>` : "")}</td>
+          <td data-l="Paid via" class="bt-sub">${esc(accountName(d.paid) || "\u2014")}</td>
           <td class="bt-act"><button class="bt-open" data-open="${d.id}">Open</button></td>
         </tr>`).join("")}</tbody></table>`;
 
@@ -1088,7 +1101,7 @@ function renderHistory(){
       else loadDoc(d);
     }));
 }
-["fType","fPaid","fFrom","fTo","fText","fSort"].forEach(id =>
+["fType","fPaid","fFrom","fTo","fText","fSort","fAccount"].forEach(id =>
   $(id).addEventListener("input", renderHistory));
 
 $("fDatesBtn").addEventListener("click", ()=>{
@@ -1118,6 +1131,16 @@ function renderTotals(rows){
     html += stat("paid", "Paid", money(paid));
     html += stat("owed", "Unpaid", money(owed));
   }
+  /* Split what has actually come in by method, so the figures reconcile
+     against each account rather than being one lump. */
+  const byMethod = new Map();
+  inv.filter(d => d.paid).forEach(d => {
+    const name = accountName(d.paid) || "Unspecified";
+    byMethod.set(name, (byMethod.get(name) || 0) + (Number(d.total) || 0));
+  });
+  [...byMethod.entries()].sort((a,b) => b[1] - a[1])
+    .forEach(([name, amt]) => { html += stat("paid", name, money(amt)); });
+
   if(quo.length){
     html += stat("", `Quoted (${quo.length})`, money(sum(quo)));
     if(inv.length) html += `<div class="note">Quotations are shown separately \u2014 they are not money owed.</div>`;
@@ -1130,13 +1153,15 @@ function renderActiveFilters(){
   if($("fText").value.trim()) bits.push(`matching "${$("fText").value.trim()}"`);
   if($("fType").value) bits.push($("fType").value === "invoice" ? "invoices only" : "quotations only");
   if($("fPaid").value) bits.push($("fPaid").value === "paid" ? "paid only" : "unpaid only");
+  if($("fAccount").value) bits.push("via " +
+    ((S.accounts||[]).find(a => a.id === $("fAccount").value)?.name || "that method"));
   if($("fFrom").value) bits.push("from " + $("fFrom").value);
   if($("fTo").value) bits.push("to " + $("fTo").value);
   $("fActive").innerHTML = bits.length
     ? `Showing ${esc(bits.join(", "))}<button id="fClear">Clear</button>` : "";
   const c = $("fClear");
   if(c) c.addEventListener("click", ()=>{
-    ["fText","fType","fPaid","fFrom","fTo"].forEach(id => $(id).value = "");
+    ["fText","fType","fPaid","fFrom","fTo","fAccount"].forEach(id => $(id).value = "");
     $("fDatesRow").style.display = "none";
     $("fDatesBtn").setAttribute("aria-expanded", "false");
     renderHistory();
@@ -1151,10 +1176,23 @@ async function loadConfig(){
   ]);
   S.num = n.exists() ? n.data()
         : { invPrefix:"", quoPrefix:"Q", invNext:1, quoNext:1, pad:3 };
-  S.accounts = a.exists() ? (a.data().list || [])
-        : ["Bank of Maldives \u2014 7770000247183", "Cash"];
+  /* Accounts used to be plain strings, which meant a document stored the name
+     and a rename could never reach it. They are now { id, name } and documents
+     reference the id. Anything saved under the old shape is converted here. */
+  const raw = a.exists() ? a.data() : {};
+  if(Array.isArray(raw.items) && raw.items.length){
+    S.accounts = raw.items.filter(x => x && x.id);
+  } else if(Array.isArray(raw.list) && raw.list.length){
+    S.accounts = raw.list.map((name, i) => ({ id: "acc" + (i + 1), name: String(name) }));
+  } else {
+    S.accounts = [
+      { id:"acc1", name:"Bank of Maldives \u2014 7770000247183" },
+      { id:"acc2", name:"Cash" }
+    ];
+  }
   fillSettings();
   fillAccountSelect();
+  renderAccountRows();
 }
 
 function fillSettings(){
@@ -1164,12 +1202,47 @@ function fillSettings(){
   $("sQuoPrefix").value = n.quoPrefix ?? "Q";
   $("sQuoNext").value   = n.quoNext ?? 1;
   $("sPad").value       = n.pad ?? 3;
-  $("sAccounts").value  = (S.accounts || []).join("\n");
+
+}
+
+/* A document keeps the id and also the name as it was at the time. The id wins
+   so renames show through; the stored name covers documents saved before ids
+   existed, and anything whose account was later deleted. */
+function accountName(paid){
+  if(!paid) return "";
+  const hit = (S.accounts||[]).find(a => a.id === paid.accountId);
+  return hit ? hit.name : (paid.account || "");
+}
+
+function renderAccountRows(){
+  const used = id => S.docs.filter(d => d.paid && (d.paid.accountId === id)).length;
+  $("accRows").innerHTML = (S.accounts||[]).map(a => `
+    <div class="acc-row" data-id="${esc(a.id)}">
+      <input class="bt-field acc-name" value="${esc(a.name)}" aria-label="Account name">
+      <span class="acc-used">${used(a.id) ? used(a.id) + " used" : ""}</span>
+      <button class="rm" aria-label="Remove">&times;</button>
+    </div>`).join("") ||
+    `<div class="bt-empty" style="padding:10px">No payment accounts yet.</div>`;
+
+  $("accRows").querySelectorAll(".rm").forEach(b =>
+    b.addEventListener("click", ()=>{
+      const row = b.closest(".acc-row");
+      const n = used(row.dataset.id);
+      const go = ()=>{ row.remove(); };
+      if(n) confirmAction("Remove this account?",
+        `${n} invoice${n===1?"":"s"} used it. They will keep showing the name as it is now, `
+        + `but it will no longer be offered when marking something paid.`, "Remove", go);
+      else go();
+    }));
 }
 
 function fillAccountSelect(){
+  const keep = $("fAccount").value;
+  $("fAccount").innerHTML = `<option value="">Any method</option>` +
+    (S.accounts||[]).map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
+  $("fAccount").value = keep;
   $("pmAccount").innerHTML = `<option value="">\u2014</option>` +
-    (S.accounts||[]).map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    (S.accounts||[]).map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
 }
 
 $("saveNumBtn").addEventListener("click", async ()=>{
@@ -1189,13 +1262,48 @@ $("saveNumBtn").addEventListener("click", async ()=>{
   }catch(e){ toast(friendly(e)); }
 });
 
+$("addAccBtn").addEventListener("click", ()=>{
+  S.accounts = readAccountRows();
+  S.accounts.push({ id: "acc" + Date.now(), name: "" });
+  renderAccountRows();
+  $("accRows").querySelector(".acc-row:last-child .acc-name")?.focus();
+});
+
+function readAccountRows(){
+  return [...$("accRows").querySelectorAll(".acc-row")].map(r => ({
+    id: r.dataset.id,
+    name: r.querySelector(".acc-name").value.trim()
+  }));
+}
+
 $("saveAccBtn").addEventListener("click", async ()=>{
   if(!isAdmin()){ toast("Only an admin can change accounts"); return; }
-  const list = $("sAccounts").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const items = readAccountRows().filter(a => a.name);
+  const before = new Map((S.accounts||[]).map(a => [a.id, a.name]));
+
+  /* Documents saved before accounts had ids only carry the old name, so a
+     rename cannot reach them by id. Those get relinked here, once. */
+  const relink = [];
+  for(const a of items){
+    const old = before.get(a.id);
+    if(old && old !== a.name){
+      S.docs.filter(d => d.paid && !d.paid.accountId && d.paid.account === old)
+            .forEach(d => relink.push([d.id, a.id, a.name]));
+    }
+  }
+
   try{
-    await setDoc(doc(db,"config","accounts"), { list }, { merge:true });
-    S.accounts = list; fillAccountSelect();
-    toast("Accounts saved");
+    await setDoc(doc(db,"config","accounts"), { items }, { merge:true });
+    for(const [docId, accId, name] of relink){
+      await updateDoc(doc(db,"documents",docId), {
+        paid: { ...S.docs.find(d=>d.id===docId).paid, accountId: accId, account: name }
+      });
+    }
+    S.accounts = items;
+    fillAccountSelect(); renderAccountRows();
+    await loadHistory();
+    toast(relink.length ? `Accounts saved, ${relink.length} older document${relink.length===1?"":"s"} updated`
+                        : "Accounts saved");
   }catch(e){ toast(friendly(e)); }
 });
 
@@ -1315,14 +1423,19 @@ $("btPaid").addEventListener("click", ()=>{
   $("pmTitle").textContent = S.paid
     ? `Payment for ${$("inv-no").value}`
     : `Mark ${$("inv-no").value} as paid`;
-  $("pmAccount").value = S.paid?.account || "";
+  $("pmAccount").value = S.paid?.accountId || "";
   $("pmDate").value = S.paid?.date || todayISO();
   $("pmUnmark").style.display = S.paid ? "" : "none";
   openModal("paidModal");
 });
 
 $("pmSave").addEventListener("click", async ()=>{
-  const p = { account: $("pmAccount").value, date: $("pmDate").value || todayISO() };
+  const accId = $("pmAccount").value;
+  const p = {
+    accountId: accId,
+    account: (S.accounts||[]).find(a => a.id === accId)?.name || "",
+    date: $("pmDate").value || todayISO()
+  };
   setPaid(p); closeModal("paidModal");
   if(S.docId){
     try{ await updateDoc(doc(db,"documents",S.docId),
@@ -1353,7 +1466,12 @@ function showView(v){
   $("navHist").setAttribute("aria-pressed", v==="hist");
   $("navSet").setAttribute("aria-pressed", v==="set");
   if(v==="hist") loadHistory();
-  if(v==="set")  loadUsers();
+  if(v==="set"){
+    loadUsers();
+    /* Re-render here rather than relying on the copy made during config load:
+       at that point history has not been fetched, so usage counts read 0. */
+    renderAccountRows();
+  }
 }
 $("navDoc").addEventListener("click", ()=>showView("doc"));
 $("navHist").addEventListener("click", ()=>showView("hist"));
