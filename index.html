@@ -1045,7 +1045,7 @@ function renderHistory(){
     if(fT && d.type !== fT) return false;
     if(fP === "paid" && !d.paid) return false;
     if(fP === "unpaid" && d.paid) return false;
-    if(fAcc && d.paid?.accountId !== fAcc) return false;
+    if(fAcc && !paidUsesAccount(d.paid, fAcc)) return false;
     if(from && (d.date||"") < from) return false;
     if(to   && (d.date||"") > to)   return false;
     if(q && !`${d.number||""} ${d.customer?.name||""}`.toLowerCase().includes(q)) return false;
@@ -1208,6 +1208,15 @@ function fillSettings(){
 /* A document keeps the id and also the name as it was at the time. The id wins
    so renames show through; the stored name covers documents saved before ids
    existed, and anything whose account was later deleted. */
+/* Documents saved before accounts had ids carry only the name, so matching
+   on id alone silently excludes every invoice paid before this update. */
+function paidUsesAccount(paid, accId){
+  if(!paid || !accId) return false;
+  if(paid.accountId) return paid.accountId === accId;
+  const acc = (S.accounts||[]).find(a => a.id === accId);
+  return !!acc && paid.account === acc.name;
+}
+
 function accountName(paid){
   if(!paid) return "";
   const hit = (S.accounts||[]).find(a => a.id === paid.accountId);
@@ -1215,7 +1224,7 @@ function accountName(paid){
 }
 
 function renderAccountRows(){
-  const used = id => S.docs.filter(d => d.paid && (d.paid.accountId === id)).length;
+  const used = id => S.docs.filter(d => paidUsesAccount(d.paid, id)).length;
   $("accRows").innerHTML = (S.accounts||[]).map(a => `
     <div class="acc-row" data-id="${esc(a.id)}">
       <input class="bt-field acc-name" value="${esc(a.name)}" aria-label="Account name">
@@ -1281,16 +1290,15 @@ $("saveAccBtn").addEventListener("click", async ()=>{
   const items = readAccountRows().filter(a => a.name);
   const before = new Map((S.accounts||[]).map(a => [a.id, a.name]));
 
-  /* Documents saved before accounts had ids only carry the old name, so a
-     rename cannot reach them by id. Those get relinked here, once. */
+  /* Documents saved before accounts had ids only carry the name. Link them by
+     matching against the name as it was before this edit, so this works on a
+     plain save as well as on a rename. */
   const relink = [];
-  for(const a of items){
-    const old = before.get(a.id);
-    if(old && old !== a.name){
-      S.docs.filter(d => d.paid && !d.paid.accountId && d.paid.account === old)
-            .forEach(d => relink.push([d.id, a.id, a.name]));
-    }
-  }
+  S.docs.filter(d => d.paid && !d.paid.accountId).forEach(d => {
+    const hit = items.find(a => before.get(a.id) === d.paid.account
+                             || a.name === d.paid.account);
+    if(hit) relink.push([d.id, hit.id, hit.name]);
+  });
 
   try{
     await setDoc(doc(db,"config","accounts"), { items }, { merge:true });
