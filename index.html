@@ -75,6 +75,13 @@
   .notes-box { flex: 1; }
   .notes-label { font-size: 11px; font-weight: 700; color: #C0392B; margin-bottom: 5px; }
   .notes-text { font-size: 11px; color: #111; line-height: 1.7; background: #f7f7f7; padding: 10px 12px; border-radius: 6px; }
+  .acct-edit { display: inline-block; min-width: 40px; outline: none;
+    border-bottom: 1px dashed #bbb; padding: 0 2px; }
+  .acct-edit:focus { border-bottom: 1px solid #C0392B; background: #fff; }
+  .acct-toggle { display: flex; gap: 4px; margin-bottom: 5px; }
+  .acct-toggle button { font-size: 10px; font-weight: 600; padding: 3px 8px; cursor: pointer;
+    border: 1px solid #ddd; background: #fff; color: #777; border-radius: 4px; }
+  .acct-toggle button.active { background: #C0392B; border-color: #C0392B; color: #fff; }
   .totals-wrap { min-width: 270px; }
   table.totals { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.totals td { padding: 5px 8px; color: #111; }
@@ -139,6 +146,8 @@
        and the footer floats up under the totals. #appView is in the middle. */
     #appView { height: 100%; display: block !important; }
     .app { max-width: 100%; height: 100%; }
+    .acct-toggle { display: none !important; }
+    .acct-edit { border-bottom: none !important; background: transparent !important; padding: 0 !important; }
     .invoice {
       box-shadow: none;
       border-radius: 0;
@@ -438,10 +447,14 @@ QW3iqt9FFRaipXVaMRGpOxfSVO8kMS+Cg659GafxJpGXZlV52It5R8PgV3b9Ha6t14hfR2S4Q1cMiKx7
       <div class="bottom-section">
         <div class="notes-box">
           <div class="notes-label">Notes</div>
+          <div class="acct-toggle">
+            <button type="button" class="active" onclick="setAccount('bt', this)">Break Time</button>
+            <button type="button" onclick="setAccount('b3', this)">B3 Const.</button>
+          </div>
           <div class="notes-text">
-            Payment to: BANK OF MALDIVES PLC<br>
-            Account name: BREAK TIME<br>
-            Account No: 7770000247183<br>
+            Payment to: <span id="acct-bank" class="acct-edit" contenteditable="true" role="textbox" aria-label="Bank name">BANK OF MALDIVES PLC</span><br>
+            Account name: <span id="acct-name" class="acct-edit" contenteditable="true" role="textbox" aria-label="Account name">BREAK TIME</span><br>
+            Account No: <span id="acct-no" class="acct-edit" contenteditable="true" role="textbox" aria-label="Account number">7770000247183</span><br>
             Viber: 9441953
           </div>
         </div>
@@ -630,6 +643,27 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
   // The customer name field wraps on its own now - see #bill-name in the
   // stylesheet. The old canvas width measuring has been removed.
 
+  var ACCOUNTS = {
+    bt: { bank: 'BANK OF MALDIVES PLC', name: 'BREAK TIME', no: '7770000247183' },
+    b3: { bank: 'BANK OF MALDIVES PLC', name: 'B3 CONST.CO.', no: '7701550287001' }
+  };
+  var currentAccount = 'bt';
+
+  function setAccount(key, btn) {
+    var a = ACCOUNTS[key];
+    if (!a) return;
+    currentAccount = key;
+    document.getElementById('acct-bank').textContent = a.bank;
+    document.getElementById('acct-name').textContent = a.name;
+    document.getElementById('acct-no').textContent = a.no;
+    document.querySelectorAll('.acct-toggle button').forEach(function (b) { b.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    else {
+      var i = key === 'b3' ? 1 : 0;
+      document.querySelectorAll('.acct-toggle button')[i].classList.add('active');
+    }
+  }
+
   function setPageMargin(mm) {
     var styleTag = document.getElementById('page-margin-style');
     if (styleTag) styleTag.textContent = '@page { margin: ' + mm + 'mm; }';
@@ -817,6 +851,7 @@ window.switchDoc = function(label, btn){
 };
 window.clearForm = function(){
   _clearForm();
+  applyPayTo(null);
   $("bill-name").focus();
   S.docId = null;
   setPaid(null);
@@ -915,8 +950,27 @@ function collectDoc(){
     gstEnabled: gstOn, gstAmount: r2(gst),
     discountEnabled: discOn, discount: r2(disc),
     subtotal: r2(sub), total: r2(sub + gst - disc),
-    paid: S.paid || null
+    paid: S.paid || null,
+    /* The bank lines are editable, so the literal text is stored rather than
+       just which preset was chosen. */
+    payTo: {
+      key:  window.currentAccount || "bt",
+      bank: $("acct-bank").textContent.trim(),
+      name: $("acct-name").textContent.trim(),
+      no:   $("acct-no").textContent.trim()
+    }
   };
+}
+
+/* Restores the bank block exactly as it was printed. Falls back to the Break
+   Time preset for documents saved before this toggle existed. */
+function applyPayTo(p){
+  window.setAccount(p?.key || "bt", null);
+  if(p){
+    if(p.bank) $("acct-bank").textContent = p.bank;
+    if(p.name) $("acct-name").textContent = p.name;
+    if(p.no)   $("acct-no").textContent   = p.no;
+  }
 }
 
 function loadDoc(d){
@@ -941,6 +995,7 @@ function loadDoc(d){
     row.querySelector(".qty").value   = it.qty   || "";
   });
   setPaid(d.paid || null);
+  applyPayTo(d.payTo);
   applySignature(d.signature || DEFAULT_SIG);
   _recalc();
   setDirty(false);
@@ -1522,6 +1577,12 @@ $("btConv").addEventListener("click", convertToInvoice);
 
 /* Plain text only: strip pasted formatting, and no hard line breaks - the
    field wraps by itself when it runs out of width. */
+/* Switching account, or hand-editing a bank line, is an unsaved change. */
+const _setAccount = window.setAccount;
+window.setAccount = function(key, btn){ _setAccount(key, btn); setDirty(true); };
+["acct-bank","acct-name","acct-no"].forEach(id =>
+  $(id).addEventListener("input", ()=>setDirty(true)));
+
 const nameEl = $("bill-name");
 nameEl.addEventListener("input", ()=>setDirty(true));
 nameEl.addEventListener("keydown", e => { if(e.key === "Enter") e.preventDefault(); });
