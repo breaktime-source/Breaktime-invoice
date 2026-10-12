@@ -524,10 +524,10 @@ OnU+OPPwsPyFCln9jkV2viLqm3UmttTFfDkE4aZjZCwQAAAAAABmREZmZERF5Mz/RERf5Mz/wCCIAGKX
         <option value="">Any method</option>
       </select>
       <select id="fSort" class="bt-field" aria-label="Sort by">
+        <option value="num-desc" selected>Number, high to low</option>
+        <option value="num-asc">Number, low to high</option>
         <option value="date-desc">Newest first</option>
         <option value="date-asc">Oldest first</option>
-        <option value="num-desc">Number, high to low</option>
-        <option value="num-asc">Number, low to high</option>
         <option value="total-desc">Largest amount</option>
         <option value="total-asc">Smallest amount</option>
       </select>
@@ -799,8 +799,76 @@ function toast(m){
   const t = $("btToast"); t.textContent = m; t.classList.add("on");
   clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove("on"), 2600);
 }
-const openModal  = id => $(id).classList.add("on");
-const closeModal = id => $(id).classList.remove("on");
+/* ---------- back button ----------
+   A phone's back button walks the browser's history. The app used to be one
+   history entry, so back closed it. Now every screen change and every open
+   dialog adds an entry: back closes the dialog, or returns to the previous
+   screen. Entries carry no URL, so the address never changes and a refresh
+   still lands on the same page. */
+const NAV = { on:false, backing:0, queue:[], view:"doc", session:0, timer:null };
+try{ history.scrollRestoration = "manual"; }catch(e){}
+
+const navEntry = (view, modal) => ({ bt:1, s:NAV.session, view, modal:modal || null, y:0 });
+
+/* Adds an entry, first noting how far down the current screen you are so
+   back can return you to the same spot. If a back() started by closing a
+   dialog is still settling, the push waits for it: landing first, it would
+   be the entry that back() removes. */
+function navPush(entry){
+  if(!NAV.on) return;
+  const y = window.scrollY || 0;
+  if(NAV.backing){ NAV.queue.push([entry, y]); return; }
+  navCommit(entry, y);
+}
+function navCommit(entry, y){
+  try{
+    const cur = history.state;
+    if(cur && cur.bt) history.replaceState({ ...cur, y }, "");
+    history.pushState(entry, "");
+  }catch(e){}
+}
+
+/* A dialog closed with its own button removes the entry it added, so the next
+   back press goes somewhere instead of doing nothing. */
+function navDropDialog(id){
+  if(!NAV.on) return;
+  const q = NAV.queue.findIndex(([e]) => e.modal === id);
+  if(q >= 0){ NAV.queue.splice(q, 1); return; }
+  const cur = history.state;
+  if(!(cur && cur.bt && cur.modal === id)) return;
+  NAV.backing++;
+  history.back();
+  // popstate normally arrives within milliseconds; never let navigation stall
+  clearTimeout(NAV.timer);
+  NAV.timer = setTimeout(navSettle, 1000);
+}
+function navSettle(){
+  NAV.backing = 0;
+  NAV.queue.splice(0).forEach(([e, y]) => navCommit(e, y));
+}
+
+function navStart(){
+  NAV.on = true; NAV.backing = 0; NAV.queue = []; NAV.view = "doc";
+  NAV.session = Date.now();
+  try{ history.replaceState(navEntry("doc"), ""); }catch(e){}
+}
+
+window.addEventListener("popstate", e => {
+  if(NAV.backing){                          // the back() we started ourselves
+    if(--NAV.backing === 0){ clearTimeout(NAV.timer); navSettle(); }
+    return;
+  }
+  if(!NAV.on) return;
+  const st = e.state && e.state.bt ? e.state : null;
+  document.querySelectorAll(".bt-modal.on").forEach(m => m.classList.remove("on"));
+  if(!st) return;
+  // left over from before a sign-out: step past it rather than show a stale screen
+  if(st.s !== NAV.session){ history.back(); return; }
+  if(st.view !== NAV.view) showView(st.view, { fromHistory:true, y:st.y || 0 });
+});
+
+const openModal  = id => { $(id).classList.add("on"); navPush(navEntry(NAV.view, id)); };
+const closeModal = id => { $(id).classList.remove("on"); navDropDialog(id); };
 document.querySelectorAll("[data-close]").forEach(b =>
   b.addEventListener("click", ()=>closeModal(b.dataset.close)));
 
@@ -1516,7 +1584,11 @@ $("pmUnmark").addEventListener("click", async ()=>{
 });
 
 /* ---------- views & buttons ---------- */
-function showView(v){
+function showView(v, opts){
+  opts = opts || {};
+  const changed = v !== NAV.view;
+  if(changed && !opts.fromHistory) navPush(navEntry(v));
+  NAV.view = v;
   document.querySelector(".tabs").style.display   = v==="doc" ? "" : "none";
   document.querySelector(".invoice").style.display = v==="doc" ? "" : "none";
   document.querySelector(".actions").style.display = v==="doc" ? "" : "none";
@@ -1532,6 +1604,10 @@ function showView(v){
        at that point history has not been fetched, so usage counts read 0. */
     renderAccountRows();
   }
+  /* A new screen starts at the top; going back returns you to where you were.
+     History keeps its rendered list while hidden, so the height is already
+     there to scroll into before the refresh lands. */
+  if(changed) window.scrollTo(0, opts.fromHistory ? (opts.y || 0) : 0);
 }
 $("navDoc").addEventListener("click", ()=>showView("doc"));
 $("navHist").addEventListener("click", ()=>showView("hist"));
@@ -1618,6 +1694,7 @@ onAuthStateChanged(auth, async user => {
   $("bootView").style.display = "none";
   if(!user){
     S.me = null;
+    NAV.on = false;
     $("loginView").style.display = "flex";
     $("appView").style.display = "none";
     $("pinInput").value = "";
@@ -1649,6 +1726,7 @@ onAuthStateChanged(auth, async user => {
   previewNumberIntoField();
   setDirty(false);
   updateButtons();
+  navStart();
   showView("doc");
   loadHistory();
 });
